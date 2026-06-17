@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>TICKR — ASX Trade Registry</title>
+<meta name="theme-color" content="#0b0e14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0b0e14;--ink2:#5b6472;--ink3:#94a0b3;
+  --paper:#f3f5f9;--card:#ffffff;--line:#e3e6ee;
+  --gain:#0e9f6e;--gain-l:#e6f7f0;
+  --loss:#e23744;--loss-l:#fdebec;
+  --gold:#b8860b;--gold-l:#fdf3da;--gold-d:#8a6508;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overscroll-behavior:none}
+body{font-family:'Space Grotesk',sans-serif;background:var(--paper);color:var(--ink);overflow:hidden;-webkit-font-smoothing:antialiased}
+.mono{font-family:'IBM Plex Mono',monospace}
+button{font-family:inherit}
+input,select,textarea{font-family:inherit}
+.app{height:100vh;display:flex;flex-direction:column}
+
+/* ── TICKER TAPE (signature element) ───────────────────────── */
+.tape-wrap{background:var(--ink);overflow:hidden;white-space:nowrap;border-bottom:1px solid #1c2230;flex-shrink:0}
+.tape-track{display:inline-flex;align-items:center;animation:tape-scroll 28s linear infinite;padding:7px 0}
+.tape-track.paused{animation-play-state:paused}
+@keyframes tape-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.tape-track{animation:none}}
+.tape-item{display:inline-flex;align-items:center;gap:6px;padding:0 16px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#fff;border-right:1px solid #232a3a}
+.tape-code{color:#fff;font-weight:700}
+.tape-up{color:var(--gain)}
+.tape-down{color:var(--loss)}
+.tape-empty{color:#5b6472;font-size:11px;padding:0 16px;font-family:'IBM Plex Mono',monospace}
+
+/* ── TOPBAR ─────────────────────────────────────────────────── */
+.topbar{background:var(--ink);padding:10px 16px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.tb-brand{font-size:18px;font-weight:700;color:#fff;letter-spacing:.5px}
+.tb-brand span{color:var(--gold)}
+.tb-sub{font-size:10px;color:#5b6472;font-weight:500;margin-top:1px}
+.tb-right{display:flex;align-items:center;gap:8px}
+.conn-dot{width:7px;height:7px;border-radius:50%;background:var(--ink3);display:inline-block;flex-shrink:0}
+.conn-dot.ok{background:var(--gain)}
+.conn-dot.err{background:var(--loss)}
+.conn-dot.spin{background:var(--gold);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.env-badge{display:none;background:var(--gold);color:#1a1200;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:.5px}
+.sync-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:8px;color:#fff;font-size:11px;font-weight:600;padding:6px 11px;cursor:pointer;display:flex;align-items:center;gap:5px}
+
+/* ── CONTENT ────────────────────────────────────────────────── */
+.content{flex:1;overflow-y:auto;padding:14px 14px 90px;-webkit-overflow-scrolling:touch}
+.page{display:none}
+.page.active{display:block}
+.section-lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--ink3);margin:18px 0 9px}
+.section-lbl:first-child{margin-top:0}
+
+/* ── CARDS ──────────────────────────────────────────────────── */
+.hero-card{background:var(--ink);border-radius:18px;padding:20px 18px;color:#fff;position:relative;overflow:hidden}
+.hero-lbl{font-size:11px;color:#7d8699;font-weight:500;letter-spacing:.3px}
+.hero-val{font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:700;margin-top:4px;letter-spacing:-.5px}
+.hero-sub{display:flex;gap:14px;margin-top:12px;font-size:11.5px}
+.hero-sub b{font-family:'IBM Plex Mono',monospace}
+.up{color:var(--gain)}.down{color:var(--loss)}
+
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.stat-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px}
+.stat-lbl{font-size:10px;color:var(--ink3);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.stat-val{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:700;margin-top:4px}
+
+/* ── HOLDINGS TABLE ─────────────────────────────────────────── */
+.hold-card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.hold-row{display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line);gap:10px}
+.hold-row:last-child{border-bottom:none}
+.hold-code{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px;background:var(--gold-l);color:var(--gold-d);padding:3px 8px;border-radius:7px;flex-shrink:0}
+.hold-mid{flex:1;min-width:0}
+.hold-qty{font-size:10.5px;color:var(--ink2);font-weight:500}
+.hold-right{text-align:right;flex-shrink:0}
+.hold-mv{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px}
+.hold-pl{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;margin-top:1px}
+.empty-state{padding:30px 16px;text-align:center;color:var(--ink3);font-size:12.5px}
+
+/* ── TRADE LIST ─────────────────────────────────────────────── */
+.trow{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.trow-tag{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.trow-tag.buy{background:var(--gain-l)}
+.trow-tag.sell{background:var(--loss-l)}
+.trow-tag.none{background:var(--gold-l)}
+.trow-mid{flex:1;min-width:0}
+.trow-code{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px}
+.trow-meta{font-size:10.5px;color:var(--ink2);margin-top:1px}
+.trow-right{text-align:right;flex-shrink:0}
+.trow-amt{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px}
+.trow-date{font-size:9.5px;color:var(--ink3);margin-top:1px}
+.trow-del{background:none;border:none;color:var(--ink3);font-size:16px;padding:4px;cursor:pointer;flex-shrink:0}
+
+/* ── FORM ───────────────────────────────────────────────────── */
+.fg{margin-bottom:13px}
+.fg2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:13px}
+.fl{font-size:11.5px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px}
+.fi,.fs{width:100%;border:1.5px solid var(--line);border-radius:11px;padding:11px 13px;font-size:14px;background:var(--card);color:var(--ink);outline:none}
+.fi:focus,.fs:focus{border-color:var(--gold)}
+.fi.mono,.fs.mono{font-family:'IBM Plex Mono',monospace}
+.fs{appearance:none;-webkit-appearance:none}
+.calc-row{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);font-size:13px}
+.calc-row:last-child{border-bottom:none}
+.calc-row.grand{padding-top:13px}
+.calc-row .v{font-family:'IBM Plex Mono',monospace;font-weight:700}
+.calc-row.grand .v{font-size:17px}
+.calc-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:4px 14px;margin:14px 0}
+.btn{width:100%;padding:14px;border-radius:13px;border:none;font-weight:700;font-size:14.5px;cursor:pointer}
+.btn-gold{background:var(--gold);color:#1a1200}
+.btn-ghost{background:var(--card);color:var(--ink2);border:1.5px solid var(--line)}
+.btn-row{display:flex;gap:9px;margin-top:6px}
+.btn-row .btn{flex:1}
+
+/* ── SETTINGS ───────────────────────────────────────────────── */
+.set-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.set-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+.set-row:last-child{border-bottom:none}
+.set-code{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px}
+.set-name{font-size:10.5px;color:var(--ink2)}
+.set-price-in{width:90px;border:1.5px solid var(--line);border-radius:8px;padding:6px 8px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;text-align:right}
+.del-x{background:none;border:none;color:var(--loss);font-size:13px;font-weight:700;padding:4px 6px;cursor:pointer}
+.dir-pill{font-size:9px;font-weight:700;padding:2px 7px;border-radius:8px;text-transform:uppercase}
+.dir-buy{background:var(--gain-l);color:var(--gain)}
+.dir-sell{background:var(--loss-l);color:var(--loss)}
+.dir-none{background:var(--gold-l);color:var(--gold-d)}
+
+/* ── BOTTOM NAV ─────────────────────────────────────────────── */
+.botnav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+.bn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;border:none;background:none;padding:7px 2px;cursor:pointer;color:var(--ink3)}
+.bn.active{color:var(--gold)}
+.bn-ic{font-size:18px}
+.bn-lbl{font-size:9.5px;font-weight:600}
+
+/* ── DRAWER / OVERLAY ───────────────────────────────────────── */
+.ov{display:none;position:fixed;inset:0;background:rgba(11,14,20,.55);z-index:300;align-items:flex-end;justify-content:center}
+.ov.show{display:flex}
+.drw{background:#fff;width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:18px 16px 28px;max-height:88vh;overflow-y:auto}
+.drw-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.drw-title{font-size:16px;font-weight:700}
+.drw-close{background:var(--paper);border:none;border-radius:50%;width:30px;height:30px;font-size:14px;cursor:pointer}
+
+/* ── ONBOARDING ─────────────────────────────────────────────── */
+.setup-screen{padding:40px 24px;text-align:center}
+.setup-icon{font-size:40px;margin-bottom:14px}
+.setup-h{font-size:19px;font-weight:700;margin-bottom:8px}
+.setup-p{font-size:13px;color:var(--ink2);line-height:1.6;margin-bottom:22px}
+.setup-step{text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px;margin-bottom:10px;font-size:12.5px;color:var(--ink2);line-height:1.6}
+.setup-step b{color:var(--ink)}
+.url-in{width:100%;border:1.5px solid var(--line);border-radius:11px;padding:12px 14px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;margin:14px 0;outline:none}
+.url-in:focus{border-color:var(--gold)}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="tape-wrap"><div id="tape-track" class="tape-track"></div></div>
+
+  <div class="topbar">
+    <div>
+      <div class="tb-brand">TICK<span>R</span></div>
+      <div class="tb-sub" id="pg-title">Dashboard</div>
+    </div>
+    <div class="tb-right">
+      <span class="env-badge" id="env-badge">TEST</span>
+      <div style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.08);border-radius:20px;padding:5px 10px 5px 7px">
+        <span class="conn-dot" id="conn-dot"></span>
+        <span style="font-size:10px;color:#7d8699;font-weight:600" id="conn-txt">Offline</span>
+      </div>
+      <button class="sync-btn" onclick="syncNow()">⟲</button>
+    </div>
+  </div>
+
+  <div class="content" id="content">
+
+    <!-- ═══ DASHBOARD ═══ -->
+    <div class="page active" id="page-dashboard">
+      <div class="hero-card">
+        <div class="hero-lbl">Total Portfolio Value</div>
+        <div class="hero-val mono" id="d-total">A$0.00</div>
+        <div class="hero-sub">
+          <span>Cost Basis: <b id="d-cost">A$0.00</b></span>
+          <span id="d-unreal">Unrealised: <b>A$0.00</b></span>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat-card"><div class="stat-lbl">Dividends Received</div><div class="stat-val mono" id="d-div">A$0.00</div></div>
+        <div class="stat-card"><div class="stat-lbl">Realised P/L</div><div class="stat-val mono" id="d-realized">A$0.00</div></div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px">
+        <div class="section-lbl" style="margin:0">Holdings</div>
+        <button onclick="openPriceUpdate()" style="background:none;border:none;color:var(--gold-d);font-size:11.5px;font-weight:700;cursor:pointer">💲 Update Prices</button>
+      </div>
+      <div class="hold-card" id="hold-card"></div>
+
+      <div class="section-lbl">Recent Trades</div>
+      <div id="recent-trades"></div>
+    </div>
+
+    <!-- ═══ ADD TRADE ═══ -->
+    <div class="page" id="page-add">
+      <div class="fg">
+        <label class="fl">Date</label>
+        <input type="date" class="fi" id="t-date">
+      </div>
+      <div class="fg2">
+        <div class="fg" style="margin-bottom:0">
+          <label class="fl">ASX Code</label>
+          <select class="fs mono" id="t-code" onchange="onTradeFieldChange()"><option value="">Select…</option></select>
+        </div>
+        <div class="fg" style="margin-bottom:0">
+          <label class="fl">Type</label>
+          <select class="fs" id="t-type" onchange="onTradeFieldChange()"><option value="">Select…</option></select>
+        </div>
+      </div>
+      <div class="fg2">
+        <div class="fg" style="margin-bottom:0">
+          <label class="fl">Quantity</label>
+          <input type="number" class="fi mono" id="t-qty" step="1" min="0" placeholder="0" oninput="onTradeFieldChange()">
+        </div>
+        <div class="fg" style="margin-bottom:0">
+          <label class="fl">Unit Price (A$)</label>
+          <input type="number" class="fi mono" id="t-price" step="0.00001" min="0" placeholder="0.00000" oninput="onTradeFieldChange()">
+        </div>
+      </div>
+
+      <div class="calc-card">
+        <div class="calc-row"><span>Amount</span><span class="v" id="t-amount">A$0.00</span></div>
+        <div class="calc-row">
+          <span>Commission <span style="color:var(--ink3)" id="t-comm-pct-lbl">(0.10%)</span></span>
+          <input type="number" class="fi mono" id="t-comm" step="0.01" min="0" style="width:110px;text-align:right;padding:6px 9px;border-radius:8px;font-size:13px" oninput="onCommissionOverride()">
+        </div>
+        <div class="calc-row grand"><span>Total Amount</span><span class="v" id="t-total">A$0.00</span></div>
+      </div>
+
+      <div class="fg">
+        <label class="fl">Notes (optional)</label>
+        <input type="text" class="fi" id="t-notes" placeholder="e.g. broker reference, comments">
+      </div>
+
+      <button class="btn btn-gold" onclick="saveTrade()">💾 Save Trade</button>
+    </div>
+
+    <!-- ═══ TRADE HISTORY ═══ -->
+    <div class="page" id="page-trades">
+      <div id="trades-list"></div>
+    </div>
+
+    <!-- ═══ SETTINGS ═══ -->
+    <div class="page" id="page-settings">
+
+      <div class="section-lbl">Commission Rate</div>
+      <div class="set-card">
+        <div class="fg" style="margin-bottom:8px">
+          <label class="fl">Commission Percentage (%)</label>
+          <input type="number" class="fi mono" id="set-comm-pct" step="0.01" min="0" placeholder="0.10">
+        </div>
+        <button class="btn btn-gold" style="padding:11px" onclick="saveCommissionPct()">Save Rate</button>
+      </div>
+
+      <div class="section-lbl">ASX Codes</div>
+      <div class="set-card">
+        <div class="fg2" style="margin-bottom:9px">
+          <input type="text" class="fi mono" id="new-code" placeholder="CODE" style="text-transform:uppercase">
+          <input type="text" class="fi" id="new-code-name" placeholder="Company name (optional)">
+        </div>
+        <button class="btn btn-ghost" style="padding:11px;margin-bottom:4px" onclick="addCode()">＋ Add Code</button>
+        <div id="codes-list" style="margin-top:8px"></div>
+      </div>
+
+      <div class="section-lbl">Transaction Types</div>
+      <div class="set-card">
+        <div class="fg" style="margin-bottom:9px">
+          <input type="text" class="fi" id="new-type" placeholder="Type name (e.g. Dividend, DRP, Fee)">
+        </div>
+        <div class="fg" style="margin-bottom:9px">
+          <select class="fs" id="new-type-dir">
+            <option value="buy">Buy-like (adds shares, adds commission)</option>
+            <option value="sell">Sell-like (removes shares, deducts commission)</option>
+            <option value="none" selected>Neutral (no share or commission effect)</option>
+          </select>
+        </div>
+        <button class="btn btn-ghost" style="padding:11px;margin-bottom:4px" onclick="addType()">＋ Add Type</button>
+        <div id="types-list" style="margin-top:8px"></div>
+      </div>
+
+      <div class="section-lbl">Google Sheets Connection</div>
+      <div class="set-card">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button id="env-btn-prod" onclick="switchEnv('prod')" style="flex:1;padding:9px;border-radius:10px;border:2px solid var(--gold);background:var(--gold);color:#1a1200;font-weight:700;font-size:13px;cursor:pointer">🏭 Production</button>
+          <button id="env-btn-test" onclick="switchEnv('test')" style="flex:1;padding:9px;border-radius:10px;border:2px solid var(--line);background:transparent;color:var(--ink2);font-weight:700;font-size:13px;cursor:pointer">🧪 Test</button>
+        </div>
+        <input id="env-url-input" class="fi mono" style="font-size:11.5px;margin-bottom:8px" placeholder="Paste Google Apps Script URL…">
+        <button class="btn btn-gold" style="padding:11px" onclick="saveEnvUrl()">🔗 Connect</button>
+        <div id="env-url-hint" style="font-size:11px;color:var(--ink3);margin-top:8px"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="botnav">
+    <button class="bn active" id="nav-dashboard" onclick="goTo('dashboard')"><span class="bn-ic">📊</span><span class="bn-lbl">Dashboard</span></button>
+    <button class="bn" id="nav-add" onclick="goTo('add')"><span class="bn-ic">＋</span><span class="bn-lbl">Add Trade</span></button>
+    <button class="bn" id="nav-trades" onclick="goTo('trades')"><span class="bn-ic">📋</span><span class="bn-lbl">Trades</span></button>
+    <button class="bn" id="nav-settings" onclick="goTo('settings')"><span class="bn-ic">⚙</span><span class="bn-lbl">Settings</span></button>
+  </div>
+</div>
+
+<!-- PRICE UPDATE DRAWER -->
+<div class="ov" id="price-ov" onclick="if(event.target===this)closePriceUpdate()">
+  <div class="drw">
+    <div class="drw-head"><div class="drw-title">💲 Update Current Prices</div><button class="drw-close" onclick="closePriceUpdate()">✕</button></div>
+    <div id="price-update-list"></div>
+    <button class="btn btn-gold" style="margin-top:14px" onclick="savePriceUpdates()">Save Prices</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// DATA & STATE
+// ════════════════════════════════════════════════════════════════
+let DB={trades:[],codes:[],types:[],settings:{commissionPct:'0.10'}};
+let GS_URL='';
+let APP_ENV='prod';
+let saveTimer=null;
+let commOverridden=false;
+
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const td=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+const nowDT=()=>{const d=new Date();return td()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
+const fM=n=>'A$'+(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fP=n=>(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:5});
+const fD=d=>{try{if(!d)return'—';const dp=(d+'').split('T')[0].split(' ')[0];const[y,m,dy]=dp.split('-');const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const l=mo[+m-1];return l?l+' '+parseInt(dy)+', '+y:d;}catch(e){return d||'—';}};
+
+// ════════════════════════════════════════════════════════════════
+// GOOGLE SHEETS SYNC
+// ════════════════════════════════════════════════════════════════
+function setConn(state,txt){
+  const dot=document.getElementById('conn-dot');
+  const t=document.getElementById('conn-txt');
+  dot.className='conn-dot '+(state||'');
+  t.textContent=txt||'';
+}
+
+async function apiCall(action,data){
+  if(!GS_URL)throw new Error('Not connected');
+  const res=await fetch(GS_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify({action,data})
+  });
+  const json=await res.json();
+  if(!json.ok)throw new Error(json.msg||'Unknown error');
+  return json;
+}
+
+async function loadFromGS(){
+  if(!GS_URL){setConn('err','Not connected');return;}
+  setConn('spin','Connecting…');
+  try{
+    const res=await apiCall('load');
+    DB.trades=(res.trades||[]).map(r=>({...r,qty:+r.qty||0,price:+r.price||0,amount:+r.amount||0,commissionPct:+r.commissionPct||0,commission:+r.commission||0,total:+r.total||0}));
+    DB.codes=(res.codes||[]).map(r=>({...r,currentPrice:+r.currentPrice||0}));
+    DB.types=res.types||[];
+    DB.settings=res.settings||{commissionPct:'0.10'};
+    if(DB.codes.length===0)DB.codes=defaultCodes();
+    if(DB.types.length===0)DB.types=defaultTypes();
+    setConn('ok','Synced');
+    renderAll();
+  }catch(e){
+    setConn('err','Load failed');
+    console.error('Load error:',e);
+  }
+}
+
+async function saveToGS(){
+  if(!GS_URL)return;
+  try{
+    await apiCall('save',{trades:DB.trades,codes:DB.codes,types:DB.types,settings:DB.settings});
+    setConn('ok','Synced');
+  }catch(e){
+    setConn('err','Sync error');
+    console.error('Save error:',e);
+  }
+}
+
+function scheduleSave(){
+  setConn('spin','Saving…');
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(saveToGS,900);
+}
+
+function syncNow(){loadFromGS();}
+
+function defaultCodes(){return [];}
+function defaultTypes(){return [
+  {name:'Buy',direction:'buy'},
+  {name:'Sell',direction:'sell'},
+  {name:'Dividend',direction:'none'}
+];}
+
+// ════════════════════════════════════════════════════════════════
+// ENVIRONMENT SWITCHER (Prod/Test)
+// ════════════════════════════════════════════════════════════════
+function updateEnvBadge(){
+  const badge=document.getElementById('env-badge');
+  if(badge)badge.style.display=APP_ENV==='test'?'inline-block':'none';
+  const bP=document.getElementById('env-btn-prod');
+  const bT=document.getElementById('env-btn-test');
+  if(bP&&bT){
+    if(APP_ENV==='prod'){
+      bP.style.background='var(--gold)';bP.style.color='#1a1200';bP.style.borderColor='var(--gold)';
+      bT.style.background='transparent';bT.style.color='var(--ink2)';bT.style.borderColor='var(--line)';
+    }else{
+      bT.style.background='var(--gold)';bT.style.color='#1a1200';bT.style.borderColor='var(--gold)';
+      bP.style.background='transparent';bP.style.color='var(--ink2)';bP.style.borderColor='var(--line)';
+    }
+  }
+  const inp=document.getElementById('env-url-input');
+  const hint=document.getElementById('env-url-hint');
+  const saved=localStorage.getItem('tickr_gs_url_'+APP_ENV)||'';
+  if(inp)inp.value=saved;
+  if(hint)hint.textContent=saved?'URL saved — tap Connect to reload':'⚠️ No URL saved for '+(APP_ENV==='prod'?'Production':'Test')+' yet';
+}
+
+function switchEnv(env){
+  if(APP_ENV===env)return;
+  APP_ENV=env;localStorage.setItem('tickr_env',env);
+  GS_URL=localStorage.getItem('tickr_gs_url_'+env)||'';
+  updateEnvBadge();
+  if(GS_URL){loadFromGS();}
+  else{setConn('err','Not connected');alert('No URL saved for '+(env==='test'?'Test':'Production')+' yet. Paste the Apps Script URL and tap Connect.');}
+}
+
+function saveEnvUrl(){
+  const inp=document.getElementById('env-url-input');
+  const url=(inp&&inp.value||'').trim();
+  if(!url){alert('Please paste a Google Apps Script URL first.');return;}
+  if(!url.startsWith('https://script.google.com/')){alert("That doesn't look like a Google Apps Script URL.");return;}
+  localStorage.setItem('tickr_gs_url_'+APP_ENV,url);
+  GS_URL=url;updateEnvBadge();loadFromGS();
+}
+
+// ════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════════════════════════════════════
+function goTo(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.bn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.getElementById('nav-'+page).classList.add('active');
+  const titles={dashboard:'Dashboard',add:'Add Trade',trades:'Trade History',settings:'Settings'};
+  document.getElementById('pg-title').textContent=titles[page]||'';
+  ({
+    dashboard:renderDash,
+    add:initTradeForm,
+    trades:renderTradesList,
+    settings:renderSettings
+  })[page]?.();
+}
+
+// ════════════════════════════════════════════════════════════════
+// HOLDINGS COMPUTATION (average-cost method)
+// ════════════════════════════════════════════════════════════════
+function computeHoldings(){
+  const map={};
+  const sorted=[...DB.trades].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  sorted.forEach(t=>{
+    const typeObj=DB.types.find(ty=>ty.name===t.type)||{direction:'none'};
+    if(!map[t.code])map[t.code]={qty:0,costBasis:0,dividends:0,realizedPL:0};
+    const h=map[t.code];
+    if(typeObj.direction==='buy'){
+      h.qty+=t.qty;
+      h.costBasis+=t.total;
+    }else if(typeObj.direction==='sell'){
+      const avgCost=h.qty>0?h.costBasis/h.qty:0;
+      const sellQty=Math.min(t.qty,h.qty);
+      const costOfSold=avgCost*sellQty;
+      h.realizedPL+=(t.total-costOfSold);
+      h.qty-=sellQty;
+      h.costBasis-=costOfSold;
+      if(h.qty<=0.0001){h.qty=0;h.costBasis=0;}
+    }else{
+      h.dividends+=t.total;
+    }
+  });
+  return map;
+}
+
+function renderAll(){
+  renderTape();
+  renderDash();
+}
+
+// ════════════════════════════════════════════════════════════════
+// TICKER TAPE
+// ════════════════════════════════════════════════════════════════
+function renderTape(){
+  const track=document.getElementById('tape-track');
+  const holdings=computeHoldings();
+  const held=Object.keys(holdings).filter(c=>holdings[c].qty>0);
+  if(held.length===0){
+    track.innerHTML='<span class="tape-empty">No holdings yet — add a trade to populate your ticker tape</span>';
+    return;
+  }
+  const items=held.map(code=>{
+    const h=holdings[code];
+    const codeObj=DB.codes.find(c=>c.code===code);
+    const price=codeObj?codeObj.currentPrice:0;
+    const mv=h.qty*price;
+    const pl=mv-h.costBasis;
+    const plPct=h.costBasis>0?(pl/h.costBasis*100):0;
+    const up=pl>=0;
+    const arrow=up?'▲':'▼';
+    const cls=up?'tape-up':'tape-down';
+    return '<span class="tape-item"><span class="tape-code">'+code+'</span><span class="'+cls+'">'+arrow+' '+Math.abs(plPct).toFixed(1)+'%</span></span>';
+  }).join('');
+  // duplicate for seamless scroll loop
+  track.innerHTML=items+items;
+}
+
+// ════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ════════════════════════════════════════════════════════════════
+function renderDash(){
+  renderTape();
+  const holdings=computeHoldings();
+  const codes=Object.keys(holdings).filter(c=>holdings[c].qty>0);
+
+  let totalMV=0,totalCost=0,totalDiv=0,totalRealized=0;
+  Object.keys(holdings).forEach(c=>{
+    const h=holdings[c];
+    totalDiv+=h.dividends;
+    totalRealized+=h.realizedPL;
+    if(h.qty>0){
+      const codeObj=DB.codes.find(x=>x.code===c);
+      const price=codeObj?codeObj.currentPrice:0;
+      totalMV+=h.qty*price;
+      totalCost+=h.costBasis;
+    }
+  });
+  const totalUnreal=totalMV-totalCost;
+  const unrealPct=totalCost>0?(totalUnreal/totalCost*100):0;
+
+  document.getElementById('d-total').textContent=fM(totalMV);
+  document.getElementById('d-cost').textContent=fM(totalCost);
+  document.getElementById('d-unreal').innerHTML='Unrealised: <b class="'+(totalUnreal>=0?'up':'down')+'">'+(totalUnreal>=0?'+':'')+fM(totalUnreal)+' ('+(unrealPct>=0?'+':'')+unrealPct.toFixed(1)+'%)</b>';
+  document.getElementById('d-div').textContent=fM(totalDiv);
+  const relEl=document.getElementById('d-realized');
+  relEl.textContent=(totalRealized>=0?'+':'')+fM(totalRealized);
+  relEl.className='stat-val mono '+(totalRealized>=0?'up':'down');
+
+  const holdCard=document.getElementById('hold-card');
+  if(codes.length===0){
+    holdCard.innerHTML='<div class="empty-state">No current holdings.<br>Add a Buy trade to get started.</div>';
+  }else{
+    holdCard.innerHTML=codes.map(c=>{
+      const h=holdings[c];
+      const codeObj=DB.codes.find(x=>x.code===c);
+      const price=codeObj?codeObj.currentPrice:0;
+      const mv=h.qty*price;
+      const pl=mv-h.costBasis;
+      const plPct=h.costBasis>0?(pl/h.costBasis*100):0;
+      const avgCost=h.qty>0?h.costBasis/h.qty:0;
+      return '<div class="hold-row">'
+        +'<span class="hold-code">'+c+'</span>'
+        +'<div class="hold-mid"><div class="hold-qty">'+h.qty+' sh @ avg '+fP(avgCost)+'</div></div>'
+        +'<div class="hold-right"><div class="hold-mv mono">'+fM(mv)+'</div>'
+        +'<div class="hold-pl '+(pl>=0?'up':'down')+'">'+(pl>=0?'+':'')+fM(pl)+' ('+(plPct>=0?'+':'')+plPct.toFixed(1)+'%)</div></div>'
+        +'</div>';
+    }).join('');
+  }
+
+  const recent=[...DB.trades].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);
+  const recEl=document.getElementById('recent-trades');
+  if(recent.length===0){
+    recEl.innerHTML='<div class="empty-state">No trades recorded yet.</div>';
+  }else{
+    recEl.innerHTML=recent.map(t=>tradeRowHtml(t)).join('');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// PRICE UPDATE DRAWER
+// ════════════════════════════════════════════════════════════════
+function openPriceUpdate(){
+  const holdings=computeHoldings();
+  const held=Object.keys(holdings).filter(c=>holdings[c].qty>0);
+  const list=document.getElementById('price-update-list');
+  if(held.length===0){
+    list.innerHTML='<div class="empty-state">No current holdings to price.</div>';
+  }else{
+    list.innerHTML=held.map(c=>{
+      const codeObj=DB.codes.find(x=>x.code===c)||{currentPrice:0};
+      return '<div class="set-row"><span class="set-code">'+c+'</span><input type="number" class="set-price-in" id="pu-'+c+'" step="0.00001" value="'+codeObj.currentPrice+'"></div>';
+    }).join('');
+  }
+  document.getElementById('price-ov').classList.add('show');
+}
+function closePriceUpdate(){document.getElementById('price-ov').classList.remove('show');}
+function savePriceUpdates(){
+  const holdings=computeHoldings();
+  Object.keys(holdings).filter(c=>holdings[c].qty>0).forEach(c=>{
+    const inp=document.getElementById('pu-'+c);
+    if(!inp)return;
+    const codeObj=DB.codes.find(x=>x.code===c);
+    if(codeObj)codeObj.currentPrice=parseFloat(inp.value)||0;
+  });
+  scheduleSave();
+  closePriceUpdate();
+  renderDash();
+}
+
+// ════════════════════════════════════════════════════════════════
+// TRADE FORM
+// ════════════════════════════════════════════════════════════════
+function fillTradeDropdowns(){
+  const codeSel=document.getElementById('t-code');
+  const cur=codeSel.value;
+  codeSel.innerHTML='<option value="">Select…</option>'+DB.codes.map(c=>'<option value="'+c.code+'">'+c.code+(c.name?' — '+c.name:'')+'</option>').join('');
+  if(cur)codeSel.value=cur;
+
+  const typeSel=document.getElementById('t-type');
+  const curT=typeSel.value;
+  typeSel.innerHTML='<option value="">Select…</option>'+DB.types.map(t=>'<option value="'+t.name+'">'+t.name+'</option>').join('');
+  if(curT)typeSel.value=curT;
+}
+
+function initTradeForm(){
+  fillTradeDropdowns();
+  commOverridden=false;
+  const dEl=document.getElementById('t-date');
+  if(!dEl.value)dEl.value=td();
+  document.getElementById('t-comm-pct-lbl').textContent='('+(DB.settings.commissionPct||'0.10')+'%)';
+  onTradeFieldChange();
+}
+
+function currentDirection(){
+  const typeName=document.getElementById('t-type').value;
+  const typeObj=DB.types.find(t=>t.name===typeName);
+  return typeObj?typeObj.direction:'none';
+}
+
+function onTradeFieldChange(){
+  const qty=parseFloat(document.getElementById('t-qty').value)||0;
+  const price=parseFloat(document.getElementById('t-price').value)||0;
+  const amount=qty*price;
+  const dir=currentDirection();
+  const commPct=parseFloat(DB.settings.commissionPct||'0.10');
+  document.getElementById('t-comm-pct-lbl').textContent='('+commPct+'%)';
+
+  document.getElementById('t-amount').textContent=fM(amount);
+
+  if(!commOverridden){
+    const autoComm=(dir==='buy'||dir==='sell')?(amount*commPct/100):0;
+    document.getElementById('t-comm').value=autoComm.toFixed(2);
+  }
+  updateTradeTotal();
+}
+
+function onCommissionOverride(){
+  commOverridden=true;
+  updateTradeTotal();
+}
+
+function updateTradeTotal(){
+  const qty=parseFloat(document.getElementById('t-qty').value)||0;
+  const price=parseFloat(document.getElementById('t-price').value)||0;
+  const amount=qty*price;
+  const comm=parseFloat(document.getElementById('t-comm').value)||0;
+  const dir=currentDirection();
+  let total=amount;
+  if(dir==='buy')total=amount+comm;
+  else if(dir==='sell')total=amount-comm;
+  document.getElementById('t-amount').textContent=fM(amount);
+  document.getElementById('t-total').textContent=fM(total);
+}
+
+function saveTrade(){
+  const code=document.getElementById('t-code').value;
+  const type=document.getElementById('t-type').value;
+  const qty=parseFloat(document.getElementById('t-qty').value)||0;
+  const price=parseFloat(document.getElementById('t-price').value)||0;
+  if(!code||!type||!qty||!price){alert('Please fill in code, type, quantity and price.');return;}
+  const amount=qty*price;
+  const dir=currentDirection();
+  const commPct=parseFloat(DB.settings.commissionPct||'0.10');
+  const comm=parseFloat(document.getElementById('t-comm').value)||0;
+  let total=amount;
+  if(dir==='buy')total=amount+comm;
+  else if(dir==='sell')total=amount-comm;
+
+  DB.trades.push({
+    id:uid(),
+    date:document.getElementById('t-date').value||td(),
+    code,type,qty,price,amount,
+    commissionPct:commPct,
+    commission:(dir==='buy'||dir==='sell')?comm:0,
+    total,
+    notes:document.getElementById('t-notes').value||''
+  });
+  scheduleSave();
+  alert('Trade saved!');
+  // reset form
+  document.getElementById('t-qty').value='';
+  document.getElementById('t-price').value='';
+  document.getElementById('t-notes').value='';
+  commOverridden=false;
+  onTradeFieldChange();
+  goTo('dashboard');
+}
+
+// ════════════════════════════════════════════════════════════════
+// TRADE HISTORY LIST
+// ════════════════════════════════════════════════════════════════
+function tradeRowHtml(t){
+  const typeObj=DB.types.find(ty=>ty.name===t.type)||{direction:'none'};
+  const icon=typeObj.direction==='buy'?'↓':typeObj.direction==='sell'?'↑':'◆';
+  const tagCls=typeObj.direction==='buy'?'buy':typeObj.direction==='sell'?'sell':'none';
+  return '<div class="trow">'
+    +'<div class="trow-tag '+tagCls+'">'+icon+'</div>'
+    +'<div class="trow-mid"><div class="trow-code">'+t.code+'</div><div class="trow-meta">'+t.type+' · '+t.qty+' @ '+fP(t.price)+'</div></div>'
+    +'<div class="trow-right"><div class="trow-amt">'+fM(t.total)+'</div><div class="trow-date">'+fD(t.date)+'</div></div>'
+    +'<button class="trow-del" onclick="deleteTrade(\''+t.id+'\')">🗑</button>'
+    +'</div>';
+}
+
+function renderTradesList(){
+  const sorted=[...DB.trades].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const el=document.getElementById('trades-list');
+  if(sorted.length===0){
+    el.innerHTML='<div class="empty-state">No trades recorded yet. Tap Add Trade to log your first transaction.</div>';
+  }else{
+    el.innerHTML=sorted.map(t=>tradeRowHtml(t)).join('');
+  }
+}
+
+function deleteTrade(id){
+  if(!confirm('Delete this trade? This cannot be undone.'))return;
+  DB.trades=DB.trades.filter(t=>t.id!==id);
+  scheduleSave();
+  renderTradesList();
+  renderDash();
+}
+
+// ════════════════════════════════════════════════════════════════
+// SETTINGS
+// ════════════════════════════════════════════════════════════════
+function renderSettings(){
+  document.getElementById('set-comm-pct').value=DB.settings.commissionPct||'0.10';
+  renderCodesList();
+  renderTypesList();
+  updateEnvBadge();
+}
+
+function saveCommissionPct(){
+  const v=document.getElementById('set-comm-pct').value;
+  DB.settings.commissionPct=v||'0.10';
+  scheduleSave();
+  alert('Commission rate saved!');
+}
+
+function renderCodesList(){
+  const el=document.getElementById('codes-list');
+  if(DB.codes.length===0){el.innerHTML='<div class="empty-state">No codes added yet.</div>';return;}
+  el.innerHTML=DB.codes.map(c=>
+    '<div class="set-row"><div><span class="set-code">'+c.code+'</span>'+(c.name?' <span class="set-name">'+c.name+'</span>':'')+'</div>'
+    +'<div style="display:flex;align-items:center;gap:8px"><span class="mono" style="font-size:11.5px;color:var(--ink2)">'+fP(c.currentPrice)+'</span>'
+    +'<button class="del-x" onclick="deleteCode(\''+c.code+'\')">Delete</button></div></div>'
+  ).join('');
+}
+
+function addCode(){
+  const codeEl=document.getElementById('new-code');
+  const nameEl=document.getElementById('new-code-name');
+  const code=codeEl.value.trim().toUpperCase();
+  if(!code){alert('Please enter an ASX code.');return;}
+  if(DB.codes.find(c=>c.code===code)){alert('That code already exists.');return;}
+  DB.codes.push({code,name:nameEl.value.trim(),currentPrice:0});
+  codeEl.value='';nameEl.value='';
+  scheduleSave();
+  renderCodesList();
+}
+
+function deleteCode(code){
+  if(!confirm('Delete code '+code+'? Existing trades will keep this code as text.'))return;
+  DB.codes=DB.codes.filter(c=>c.code!==code);
+  scheduleSave();
+  renderCodesList();
+}
+
+function renderTypesList(){
+  const el=document.getElementById('types-list');
+  if(DB.types.length===0){el.innerHTML='<div class="empty-state">No types added yet.</div>';return;}
+  el.innerHTML=DB.types.map(t=>
+    '<div class="set-row"><div><span style="font-weight:600;font-size:13px">'+t.name+'</span> '
+    +'<span class="dir-pill dir-'+t.direction+'">'+t.direction+'</span></div>'
+    +'<button class="del-x" onclick="deleteType(\''+t.name+'\')">Delete</button></div>'
+  ).join('');
+}
+
+function addType(){
+  const nameEl=document.getElementById('new-type');
+  const dirEl=document.getElementById('new-type-dir');
+  const name=nameEl.value.trim();
+  if(!name){alert('Please enter a type name.');return;}
+  if(DB.types.find(t=>t.name===name)){alert('That type already exists.');return;}
+  DB.types.push({name,direction:dirEl.value});
+  nameEl.value='';
+  scheduleSave();
+  renderTypesList();
+}
+
+function deleteType(name){
+  if(!confirm('Delete type "'+name+'"? Existing trades will keep this type as text.'))return;
+  DB.types=DB.types.filter(t=>t.name!==name);
+  scheduleSave();
+  renderTypesList();
+}
+
+// ════════════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded',()=>{
+  APP_ENV=localStorage.getItem('tickr_env')||'prod';
+  GS_URL=localStorage.getItem('tickr_gs_url_'+APP_ENV)||'';
+  document.getElementById('t-date').value=td();
+  renderTape();
+  if(GS_URL){setTimeout(loadFromGS,300);}else{setConn('err','Not connected');}
+});
+
+// ── Service Worker ────────────────────────────────────────────
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js')
+      .then(reg=>{console.log('SW registered');reg.update();})
+      .catch(err=>console.log('SW error:',err));
+  });
+}
+
+// ── PWA install prompt ──────────────────────────────────────────
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;});
+
+// ── Online/offline ───────────────────────────────────────────────
+window.addEventListener('online',()=>{setConn('spin','Reconnecting…');setTimeout(loadFromGS,1000);});
+window.addEventListener('offline',()=>{setConn('err','Offline');});
+</script>
+</body>
+</html>
