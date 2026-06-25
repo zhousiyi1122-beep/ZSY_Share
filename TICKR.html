@@ -248,7 +248,8 @@ input,select,textarea{font-family:inherit}
         <input type="text" class="fi" id="t-notes" placeholder="e.g. broker reference, comments">
       </div>
 
-      <button class="btn btn-gold" onclick="saveTrade()">💾 Save Trade</button>
+      <button class="btn btn-gold" id="trade-save-btn" onclick="saveTrade()">💾 Save Trade</button>
+      <button class="btn btn-ghost" id="trade-cancel-edit-btn" style="display:none;margin-top:8px" onclick="cancelEditTrade()">✕ Cancel Edit</button>
     </div>
 
     <!-- ═══ TRADE HISTORY ═══ -->
@@ -368,6 +369,7 @@ let GS_URL='';
 let APP_ENV='prod';
 let saveTimer=null;
 let commOverridden=false;
+let editingTradeId=null;
 
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const td=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
@@ -688,10 +690,20 @@ function fillTradeDropdowns(){
 }
 
 function initTradeForm(){
+  editingTradeId=null;
   fillTradeDropdowns();
   commOverridden=false;
   const dEl=document.getElementById('t-date');
-  if(!dEl.value)dEl.value=td();
+  dEl.value=td();
+  document.getElementById('t-code').value='';
+  document.getElementById('t-type').value='';
+  document.getElementById('t-qty').value='';
+  document.getElementById('t-price').value='';
+  document.getElementById('t-notes').value='';
+  const btn=document.getElementById('trade-save-btn');
+  if(btn)btn.textContent='💾 Save Trade';
+  const cancelBtn=document.getElementById('trade-cancel-edit-btn');
+  if(cancelBtn)cancelBtn.style.display='none';
   updateCommLabel();
   onTradeFieldChange();
 }
@@ -700,6 +712,41 @@ function updateCommLabel(){
   const pct=DB.settings.commissionPct||'0.10';
   const gstPct=DB.settings.commissionGstPct||'10';
   document.getElementById('t-comm-pct-lbl').textContent='('+pct+'% + '+gstPct+'% GST)';
+}
+
+function editTrade(id){
+  const t=DB.trades.find(x=>x.id===id);
+  if(!t)return;
+  editingTradeId=id;
+
+  // Switch to the Add Trade page without triggering initTradeForm's reset
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.bn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-add').classList.add('active');
+  document.getElementById('nav-add').classList.add('active');
+  document.getElementById('pg-title').textContent='Edit Trade';
+
+  fillTradeDropdowns();
+  document.getElementById('t-date').value=(t.date||'').split('T')[0].split(' ')[0]||td();
+  document.getElementById('t-code').value=t.code||'';
+  document.getElementById('t-type').value=t.type||'';
+  document.getElementById('t-qty').value=t.qty||'';
+  document.getElementById('t-price').value=t.price||'';
+  document.getElementById('t-notes').value=t.notes||'';
+  commOverridden=true;
+  document.getElementById('t-comm').value=(t.commission||0).toFixed(2);
+  updateCommLabel();
+  updateTradeTotal();
+
+  const btn=document.getElementById('trade-save-btn');
+  if(btn)btn.textContent='💾 Update Trade';
+  const cancelBtn=document.getElementById('trade-cancel-edit-btn');
+  if(cancelBtn)cancelBtn.style.display='block';
+}
+
+function cancelEditTrade(){
+  editingTradeId=null;
+  goTo('add');
 }
 
 function currentDirection(){
@@ -762,8 +809,7 @@ function saveTrade(){
   if(dir==='buy')total=amount+comm;
   else if(dir==='sell')total=amount-comm;
 
-  DB.trades.push({
-    id:uid(),
+  const tradeData={
     date:document.getElementById('t-date').value||td(),
     code,type,qty,price,amount,
     commissionPct:commPct,
@@ -773,14 +819,31 @@ function saveTrade(){
     commission:(dir==='buy'||dir==='sell')?comm:0,
     total,
     notes:document.getElementById('t-notes').value||''
-  });
-  scheduleSave();
-  alert('Trade saved!');
+  };
+
+  if(editingTradeId){
+    const idx=DB.trades.findIndex(x=>x.id===editingTradeId);
+    if(idx>-1){
+      DB.trades[idx]={id:editingTradeId,...tradeData};
+    }
+    editingTradeId=null;
+    scheduleSave();
+    alert('Trade updated!');
+  }else{
+    DB.trades.push({id:uid(),...tradeData});
+    scheduleSave();
+    alert('Trade saved!');
+  }
+
   // reset form
   document.getElementById('t-qty').value='';
   document.getElementById('t-price').value='';
   document.getElementById('t-notes').value='';
   commOverridden=false;
+  const btn=document.getElementById('trade-save-btn');
+  if(btn)btn.textContent='💾 Save Trade';
+  const cancelBtn=document.getElementById('trade-cancel-edit-btn');
+  if(cancelBtn)cancelBtn.style.display='none';
   onTradeFieldChange();
   goTo('dashboard');
 }
@@ -796,6 +859,7 @@ function tradeRowHtml(t){
     +'<div class="trow-tag '+tagCls+'">'+icon+'</div>'
     +'<div class="trow-mid"><div class="trow-code">'+t.code+'</div><div class="trow-meta">'+t.type+' · '+t.qty+' @ '+fP(t.price)+'</div></div>'
     +'<div class="trow-right"><div class="trow-amt">'+fM(t.total)+'</div><div class="trow-date">'+fD(t.date)+'</div></div>'
+    +'<button class="trow-del" onclick="editTrade(\''+t.id+'\')" style="color:var(--ink2)">✏️</button>'
     +'<button class="trow-del" onclick="deleteTrade(\''+t.id+'\')">🗑</button>'
     +'</div>';
 }
