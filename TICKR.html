@@ -126,7 +126,7 @@ input,select,textarea{font-family:inherit}
 .set-row:last-child{border-bottom:none}
 .set-code{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px}
 .set-name{font-size:10.5px;color:var(--ink2)}
-.set-price-in{width:90px;border:1.5px solid var(--line);border-radius:8px;padding:6px 8px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;text-align:right}
+.set-price-in{width:118px;border:1.5px solid var(--line);border-radius:8px;padding:6px 8px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;text-align:right}
 .del-x{background:none;border:none;color:var(--loss);font-size:13px;font-weight:700;padding:4px 6px;cursor:pointer}
 .dir-pill{font-size:9px;font-weight:700;padding:2px 7px;border-radius:8px;text-transform:uppercase}
 .dir-buy{background:var(--gain-l);color:var(--gain)}
@@ -230,7 +230,7 @@ input,select,textarea{font-family:inherit}
         </div>
         <div class="fg" style="margin-bottom:0">
           <label class="fl">Unit Price (A$)</label>
-          <input type="number" class="fi mono" id="t-price" step="0.00001" min="0" placeholder="0.00000" oninput="onTradeFieldChange()">
+          <input type="number" class="fi mono" id="t-price" step="0.0000001" min="0" placeholder="0.0000000" oninput="onTradeFieldChange()">
         </div>
       </div>
 
@@ -373,7 +373,7 @@ const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const td=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 const nowDT=()=>{const d=new Date();return td()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
 const fM=n=>'A$'+(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
-const fP=n=>(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:5});
+const fP=n=>(Number(n)||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:7});
 const fD=d=>{try{if(!d)return'—';const dp=(d+'').split('T')[0].split(' ')[0];const[y,m,dy]=dp.split('-');const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];const l=mo[+m-1];return l?l+' '+parseInt(dy)+', '+y:d;}catch(e){return d||'—';}};
 
 // ════════════════════════════════════════════════════════════════
@@ -653,7 +653,7 @@ function openPriceUpdate(){
   }else{
     list.innerHTML=held.map(c=>{
       const codeObj=DB.codes.find(x=>x.code===c)||{currentPrice:0};
-      return '<div class="set-row"><span class="set-code">'+c+'</span><input type="number" class="set-price-in" id="pu-'+c+'" step="0.00001" value="'+codeObj.currentPrice+'"></div>';
+      return '<div class="set-row"><span class="set-code">'+c+'</span><input type="number" class="set-price-in" id="pu-'+c+'" step="0.0000001" value="'+codeObj.currentPrice+'"></div>';
     }).join('');
   }
   document.getElementById('price-ov').classList.add('show');
