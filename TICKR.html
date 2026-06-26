@@ -746,7 +746,7 @@ function editTrade(id){
 
 function cancelEditTrade(){
   editingTradeId=null;
-  goTo('add');
+  goTo('trades');
 }
 
 function currentDirection(){
@@ -767,7 +767,8 @@ function onTradeFieldChange(){
   document.getElementById('t-amount').textContent=fM(amount);
 
   if(!commOverridden){
-    const commExGst=(dir==='buy'||dir==='sell')?(amount*commPct/100):0;
+    const commExGstRaw=(dir==='buy'||dir==='sell')?(amount*commPct/100):0;
+    const commExGst=Math.ceil(commExGstRaw*100)/100;
     const autoComm=commExGst*(1+gstPct/100);
     document.getElementById('t-comm').value=autoComm.toFixed(2);
   }
@@ -803,7 +804,7 @@ function saveTrade(){
   const commPct=parseFloat(DB.settings.commissionPct||'0.10');
   const gstPct=parseFloat(DB.settings.commissionGstPct||'10');
   const comm=parseFloat(document.getElementById('t-comm').value)||0;
-  const commExGst=commOverridden?(comm/(1+gstPct/100)):(amount*commPct/100);
+  const commExGst=commOverridden?(comm/(1+gstPct/100)):Math.ceil((amount*commPct/100)*100)/100;
   const commGstAmt=comm-commExGst;
   let total=amount;
   if(dir==='buy')total=amount+comm;
@@ -845,7 +846,7 @@ function saveTrade(){
   const cancelBtn=document.getElementById('trade-cancel-edit-btn');
   if(cancelBtn)cancelBtn.style.display='none';
   onTradeFieldChange();
-  goTo('dashboard');
+  goTo('trades');
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -897,9 +898,12 @@ function renderSettings(){
 function updateCommPreview(){
   const pct=parseFloat(document.getElementById('set-comm-pct').value)||0;
   const gstPct=parseFloat(document.getElementById('set-comm-gst-pct').value)||0;
-  const combined=pct*(1+gstPct/100);
+  const exampleAmt=10000;
+  const commExGst=Math.ceil((exampleAmt*pct/100)*100)/100;
+  const commGst=commExGst*gstPct/100;
+  const total=commExGst+commGst;
   const el=document.getElementById('set-comm-preview');
-  if(el)el.textContent='Example: $10,000 trade → commission '+fM(10000*pct/100)+' + GST '+fM(10000*pct/100*gstPct/100)+' = '+fM(10000*combined/100)+' total ('+combined.toFixed(4)+'% effective)';
+  if(el)el.textContent='Example: $10,000 trade → commission '+fM(commExGst)+' (rounded up) + GST '+fM(commGst)+' = '+fM(total)+' total';
 }
 
 function saveCommissionPct(){
