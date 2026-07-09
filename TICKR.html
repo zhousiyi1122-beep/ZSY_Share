@@ -201,11 +201,9 @@ input,select,textarea{font-family:inherit}
         <div class="stat-card"><div class="stat-lbl">Net Unrealised P/L</div><div class="stat-val mono" id="d-net">A$0.00</div></div>
       </div>
 
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px">
-        <div class="section-lbl" style="margin:0">Holdings</div>
-        <button onclick="openPriceUpdate()" style="background:none;border:none;color:var(--gold-d);font-size:11.5px;font-weight:700;cursor:pointer">💲 Update Prices</button>
-      </div>
+      <div class="section-lbl" style="margin-top:18px">Holdings</div>
       <div class="hold-card" id="hold-card"></div>
+      <button id="save-prices-btn" onclick="saveInlinePrices()" style="display:none;width:100%;text-align:center;background:var(--gold);border:none;border-radius:11px;color:#1a1200;font-size:13px;font-weight:700;cursor:pointer;padding:11px;margin:10px 0 4px">💾 Save Updated Prices</button>
 
       <div class="section-lbl">Recent Trades</div>
       <div id="recent-trades"></div>
@@ -647,11 +645,17 @@ function renderDash(){
       const pl=mv-h.costBasis;
       const plPct=h.costBasis>0?(pl/h.costBasis*100):0;
       const avgCost=h.qty>0?h.costBasis/h.qty:0;
-      return '<div class="hold-row">'
+      return '<div class="hold-row" style="flex-direction:column;align-items:stretch;gap:8px">'
+        +'<div style="display:flex;align-items:center;gap:10px">'
         +'<span class="hold-code">'+c+'</span>'
         +'<div class="hold-mid"><div class="hold-qty">'+h.qty+' sh @ avg '+fP(avgCost)+'</div></div>'
         +'<div class="hold-right"><div class="hold-mv mono">'+fM(mv)+'</div>'
         +'<div class="hold-pl '+(pl>=0?'up':'down')+'">'+(pl>=0?'+':'')+fM(pl)+' ('+(plPct>=0?'+':'')+plPct.toFixed(1)+'%)</div></div>'
+        +'</div>'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--paper);border-radius:9px;padding:7px 10px">'
+        +'<span style="font-size:10.5px;color:var(--ink2);font-weight:600">Current Price</span>'
+        +'<input type="number" class="set-price-in" id="hp-'+c+'" step="0.0000001" value="'+price+'" oninput="onInlinePriceChange()" style="width:130px">'
+        +'</div>'
         +'</div>';
     }).join('');
   }
@@ -663,6 +667,31 @@ function renderDash(){
   }else{
     recEl.innerHTML=recent.map(t=>tradeRowHtml(t)).join('');
   }
+}
+
+function onInlinePriceChange(){
+  const btn=document.getElementById('save-prices-btn');
+  if(btn)btn.style.display='block';
+}
+
+function saveInlinePrices(){
+  const holdings=computeHoldings();
+  const codes=Object.keys(holdings).filter(c=>holdings[c].qty>0);
+  let count=0;
+  codes.forEach(c=>{
+    const inp=document.getElementById('hp-'+c);
+    if(!inp)return;
+    const codeObj=DB.codes.find(x=>x.code===c);
+    const newPrice=parseFloat(inp.value)||0;
+    if(codeObj&&codeObj.currentPrice!==newPrice){
+      codeObj.currentPrice=newPrice;
+      count++;
+    }
+  });
+  scheduleSave();
+  const btn=document.getElementById('save-prices-btn');
+  if(btn)btn.style.display='none';
+  renderDash();
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -677,7 +706,11 @@ function openPriceUpdate(){
   }else{
     list.innerHTML=held.map(c=>{
       const codeObj=DB.codes.find(x=>x.code===c)||{currentPrice:0};
-      return '<div class="set-row"><span class="set-code">'+c+'</span><input type="number" class="set-price-in" id="pu-'+c+'" step="0.0000001" value="'+codeObj.currentPrice+'" oninput="updatePriceDrawerSummary()"></div>';
+      return '<div class="set-row"><span class="set-code">'+c+'</span>'
+        +'<div style="display:flex;align-items:center;gap:8px">'
+        +'<span class="mono" style="font-size:11px;color:var(--ink3)">was '+fP(codeObj.currentPrice)+'</span>'
+        +'<input type="number" class="set-price-in" id="pu-'+c+'" step="0.0000001" value="'+codeObj.currentPrice+'" oninput="updatePriceDrawerSummary()">'
+        +'</div></div>';
     }).join('');
   }
   updatePriceDrawerSummary();
