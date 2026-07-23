@@ -874,6 +874,11 @@ function updateTradeTotal(){
   document.getElementById('t-total').textContent=fM(total);
 }
 
+function updateCurrentPriceFromBuy(code,price){
+  const codeObj=DB.codes.find(x=>x.code===code);
+  if(codeObj)codeObj.currentPrice=price;
+}
+
 function saveTrade(){
   const code=document.getElementById('t-code').value;
   const type=document.getElementById('t-type').value;
@@ -911,10 +916,12 @@ function saveTrade(){
       DB.trades[idx]={id:editingTradeId,...tradeData};
     }
     editingTradeId=null;
+    if(dir==='buy')updateCurrentPriceFromBuy(code,price);
     scheduleSave();
     alert('Trade updated!');
   }else{
     DB.trades.push({id:uid(),...tradeData});
+    if(dir==='buy')updateCurrentPriceFromBuy(code,price);
     scheduleSave();
     alert('Trade saved!');
   }
