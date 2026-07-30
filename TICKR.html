@@ -652,9 +652,9 @@ function renderDash(){
         +'<div class="hold-right"><div class="hold-mv mono">'+fM(mv)+'</div>'
         +'<div class="hold-pl '+(pl>=0?'up':'down')+'">'+(pl>=0?'+':'')+fM(pl)+' ('+(plPct>=0?'+':'')+plPct.toFixed(1)+'%)</div></div>'
         +'</div>'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--paper);border-radius:9px;padding:7px 10px">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--paper);border-radius:9px;padding:9px 10px">'
         +'<span style="font-size:10.5px;color:var(--ink2);font-weight:600">Current Price</span>'
-        +'<input type="number" class="set-price-in" id="hp-'+c+'" step="0.0000001" value="'+price+'" oninput="onInlinePriceChange()" style="width:130px">'
+        +'<input type="number" class="set-price-in price-vs-cost" id="hp-'+c+'" data-avgcost="'+avgCost+'" step="0.0000001" value="'+price+'" oninput="onInlinePriceChange(this)" style="width:150px;font-size:15px;font-weight:800;padding:9px 10px;color:'+(price>=avgCost?'var(--gain)':'var(--loss)')+'">'
         +'</div>'
         +'</div>';
     }).join('');
@@ -673,9 +673,14 @@ function renderDash(){
   }
 }
 
-function onInlinePriceChange(){
+function onInlinePriceChange(inputEl){
   const btn=document.getElementById('save-prices-btn');
   if(btn)btn.style.display='block';
+  if(inputEl){
+    const avgCost=parseFloat(inputEl.dataset.avgcost)||0;
+    const newPrice=parseFloat(inputEl.value)||0;
+    inputEl.style.color=newPrice>=avgCost?'var(--gain)':'var(--loss)';
+  }
 }
 
 function saveInlinePrices(){
