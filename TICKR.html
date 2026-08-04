@@ -1148,45 +1148,25 @@ function renderPLByCode(){
   const portfolio=computePortfolio();
   const el=document.getElementById('pl-by-code');
 
-  if(hasFilter){
-    const events=portfolio.events.filter(e=>inDateRange(e.date,from,to));
-    const map={};
-    events.forEach(e=>{
-      if(!map[e.code])map[e.code]={realized:0,dividend:0};
-      if(e.kind==='realized')map[e.code].realized+=e.amount;
-      else map[e.code].dividend+=e.amount;
-    });
-    const codes=Object.keys(map);
-    if(codes.length===0){el.innerHTML='<div class="empty-state">No realised P/L or dividends in this date range.</div>';return;}
-    el.innerHTML=codes.map(c=>{
-      const d=map[c];
-      const total=d.realized+d.dividend;
-      return '<div class="hold-row">'
-        +'<span class="hold-code">'+c+'</span>'
-        +'<div class="hold-mid"><div class="hold-qty">Realised '+(d.realized>=0?'+':'')+fM(d.realized)+' &middot; Div '+fM(d.dividend)+'</div></div>'
-        +'<div class="hold-right"><div class="hold-mv mono '+(total>=0?'up':'down')+'">'+(total>=0?'+':'')+fM(total)+'</div>'
-        +'<div class="hold-pl" style="color:var(--ink3)">P/L in range</div></div>'
-        +'</div>';
-    }).join('');
-  }else{
-    const holdings=portfolio.holdings;
-    const codes=Object.keys(holdings);
-    if(codes.length===0){el.innerHTML='<div class="empty-state">No trade history yet.</div>';return;}
-    el.innerHTML=codes.map(c=>{
-      const h=holdings[c];
-      const codeObj=DB.codes.find(x=>x.code===c);
-      const price=codeObj?codeObj.currentPrice:0;
-      const mv=h.qty*price;
-      const unreal=mv-h.costBasis;
-      const totalPL=h.realizedPL+h.dividends+unreal;
-      return '<div class="hold-row">'
-        +'<span class="hold-code">'+c+'</span>'
-        +'<div class="hold-mid"><div class="hold-qty">Realised '+(h.realizedPL>=0?'+':'')+fM(h.realizedPL)+' &middot; Div '+fM(h.dividends)+(h.qty>0?' &middot; Unrl '+(unreal>=0?'+':'')+fM(unreal):'')+'</div></div>'
-        +'<div class="hold-right"><div class="hold-mv mono '+(totalPL>=0?'up':'down')+'">'+(totalPL>=0?'+':'')+fM(totalPL)+'</div>'
-        +'<div class="hold-pl" style="color:var(--ink3)">Total P/L</div></div>'
-        +'</div>';
-    }).join('');
-  }
+  const events=hasFilter?portfolio.events.filter(e=>inDateRange(e.date,from,to)):portfolio.events;
+  const map={};
+  events.forEach(e=>{
+    if(!map[e.code])map[e.code]={realized:0,dividend:0};
+    if(e.kind==='realized')map[e.code].realized+=e.amount;
+    else map[e.code].dividend+=e.amount;
+  });
+  const codes=Object.keys(map);
+  if(codes.length===0){el.innerHTML='<div class="empty-state">No realised P/L or dividends'+(hasFilter?' in this date range':' yet')+'.</div>';return;}
+  el.innerHTML=codes.map(c=>{
+    const d=map[c];
+    const total=d.realized+d.dividend;
+    return '<div class="hold-row">'
+      +'<span class="hold-code">'+c+'</span>'
+      +'<div class="hold-mid"><div class="hold-qty">Realised '+(d.realized>=0?'+':'')+fM(d.realized)+' &middot; Div '+fM(d.dividend)+'</div></div>'
+      +'<div class="hold-right"><div class="hold-mv mono '+(total>=0?'up':'down')+'">'+(total>=0?'+':'')+fM(total)+'</div>'
+      +'<div class="hold-pl" style="color:var(--ink3)">Total</div></div>'
+      +'</div>';
+  }).join('');
 }
 
 function renderMonthlyPL(){
