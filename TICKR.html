@@ -550,7 +550,7 @@ function estimateCommission(value){
   const commPct=parseFloat(DB.settings.commissionPct||'0.10');
   const gstPct=parseFloat(DB.settings.commissionGstPct||'10');
   const exGst=Math.ceil(value*commPct/100*100)/100;
-  const gst=Math.ceil(exGst*gstPct/100*100)/100;
+  const gst=Math.round(exGst*gstPct/100*100)/100;
   return exGst+gst;
 }
 
@@ -822,10 +822,9 @@ function editTrade(id){
   document.getElementById('t-qty').value=t.qty||'';
   document.getElementById('t-price').value=t.price||'';
   document.getElementById('t-notes').value=t.notes||'';
-  commOverridden=true;
-  document.getElementById('t-comm').value=(t.commission||0).toFixed(2);
+  commOverridden=false;
   updateCommLabel();
-  updateTradeTotal();
+  onTradeFieldChange();
 
   const btn=document.getElementById('trade-save-btn');
   if(btn)btn.textContent='💾 Update Trade';
@@ -858,7 +857,7 @@ function onTradeFieldChange(){
   if(!commOverridden){
     const commExGstRaw=(dir==='buy'||dir==='sell')?(amount*commPct/100):0;
     const commExGst=Math.ceil(commExGstRaw*100)/100;
-    const commGst=Math.ceil(commExGst*gstPct/100*100)/100;
+    const commGst=Math.round(commExGst*gstPct/100*100)/100;
     const autoComm=commExGst+commGst;
     document.getElementById('t-comm').value=autoComm.toFixed(2);
   }
@@ -900,7 +899,7 @@ function saveTrade(){
   const gstPct=parseFloat(DB.settings.commissionGstPct||'10');
   const comm=parseFloat(document.getElementById('t-comm').value)||0;
   const commExGst=commOverridden?(comm/(1+gstPct/100)):Math.ceil((amount*commPct/100)*100)/100;
-  const commGstAmt=commOverridden?(comm-commExGst):Math.ceil(commExGst*gstPct/100*100)/100;
+  const commGstAmt=commOverridden?(comm-commExGst):Math.round(commExGst*gstPct/100*100)/100;
   const autoComm=commOverridden?comm:(commExGst+commGstAmt);
   const finalComm=commOverridden?comm:autoComm;
   let total=amount;
@@ -1003,7 +1002,7 @@ function updateCommPreview(){
   const gstPct=parseFloat(document.getElementById('set-comm-gst-pct').value)||0;
   const exampleAmt=10000;
   const commExGst=Math.ceil((exampleAmt*pct/100)*100)/100;
-  const commGst=Math.ceil(commExGst*gstPct/100*100)/100;
+  const commGst=Math.round(commExGst*gstPct/100*100)/100;
   const total=commExGst+commGst;
   const el=document.getElementById('set-comm-preview');
   if(el)el.textContent='Example: $10,000 trade → commission '+fM(commExGst)+' (rounded up) + GST '+fM(commGst)+' = '+fM(total)+' total';
@@ -1028,7 +1027,7 @@ function recalcAllCommissions(){
     const dir=typeObj.direction;
     if(dir!=='buy'&&dir!=='sell')return;
     const commExGst=Math.ceil(t.amount*commPct/100*100)/100;
-    const commGst=Math.ceil(commExGst*gstPct/100*100)/100;
+    const commGst=Math.round(commExGst*gstPct/100*100)/100;
     const comm=commExGst+commGst;
     t.commissionPct=commPct;
     t.commissionGstPct=gstPct;
