@@ -183,6 +183,11 @@ input,select,textarea{font-family:inherit}
 
     <!-- ═══ DASHBOARD ═══ -->
     <div class="page active" id="page-dashboard">
+      <div id="reconnect-banner" style="display:none;background:#fef2f2;border:1.5px solid #fecaca;border-radius:13px;padding:12px 14px;margin-bottom:14px">
+        <div style="font-size:12.5px;font-weight:700;color:#b91c1c;margin-bottom:6px">⚠️ Not connected to Google Sheets</div>
+        <div style="font-size:11.5px;color:#7f1d1d;margin-bottom:10px">Your data is not syncing. Reconnect below or from a saved reconnect link.</div>
+        <button onclick="goTo('settings');setTimeout(function(){var el=document.getElementById('env-url-input');if(el)el.focus();},150)" style="width:100%;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:12.5px;cursor:pointer">🔗 Reconnect Now</button>
+      </div>
       <div class="hero-card">
         <div class="hero-lbl">Total Portfolio Value</div>
         <div class="hero-val mono" id="d-total">A$0.00</div>
@@ -392,6 +397,8 @@ function setConn(state,txt){
   const t=document.getElementById('conn-txt');
   dot.className='conn-dot '+(state||'');
   t.textContent=txt||'';
+  const banner=document.getElementById('reconnect-banner');
+  if(banner)banner.style.display=(state==='err'&&!GS_URL)?'block':'none';
 }
 
 async function apiCall(action,data){
@@ -498,7 +505,9 @@ function copyReconnectLink(){
   if(!GS_URL){alert('Connect to a Google Sheet first, then generate the reconnect link.');return;}
   const base=window.location.origin+window.location.pathname;
   const link=base+'?gs='+encodeURIComponent(GS_URL)+'&env='+APP_ENV;
-  if(navigator.clipboard&&navigator.clipboard.writeText){
+  if(navigator.share){
+    navigator.share({title:'TICKR Reconnect Link',text:'Save this link — open it to reconnect TICKR to your Google Sheet.',url:link}).catch(()=>{});
+  }else if(navigator.clipboard&&navigator.clipboard.writeText){
     navigator.clipboard.writeText(link).then(()=>{
       alert('Reconnect link copied!\n\nPaste it into your bookmarks, Notes app, or Home Screen shortcut instead of the plain TICKR link.');
     }).catch(()=>{
