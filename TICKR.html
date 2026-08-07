@@ -339,6 +339,8 @@ input,select,textarea{font-family:inherit}
         <input id="env-url-input" class="fi mono" style="font-size:11.5px;margin-bottom:8px" placeholder="Paste Google Apps Script URL…">
         <button class="btn btn-gold" style="padding:11px" onclick="saveEnvUrl()">🔗 Connect</button>
         <div id="env-url-hint" style="font-size:11px;color:var(--ink3);margin-top:8px"></div>
+        <button class="btn btn-ghost" style="padding:10px;margin-top:10px;font-size:12.5px" onclick="copyReconnectLink()">🔗 Copy Reconnect Link (bookmark this!)</button>
+        <p style="font-size:10.5px;color:var(--ink3);line-height:1.5;margin-top:8px">Save this link as a bookmark or Home Screen shortcut instead of the plain app URL. If browser data is ever cleared, opening this link auto-reconnects — no need to paste the URL again.</p>
       </div>
 
     </div>
@@ -490,6 +492,21 @@ function saveEnvUrl(){
   if(!url.startsWith('https://script.google.com/')){alert("That doesn't look like a Google Apps Script URL.");return;}
   localStorage.setItem('tickr_gs_url_'+APP_ENV,url);
   GS_URL=url;updateEnvBadge();loadFromGS();
+}
+
+function copyReconnectLink(){
+  if(!GS_URL){alert('Connect to a Google Sheet first, then generate the reconnect link.');return;}
+  const base=window.location.origin+window.location.pathname;
+  const link=base+'?gs='+encodeURIComponent(GS_URL)+'&env='+APP_ENV;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(link).then(()=>{
+      alert('Reconnect link copied!\n\nPaste it into your bookmarks, Notes app, or Home Screen shortcut instead of the plain TICKR link.');
+    }).catch(()=>{
+      prompt('Copy this link manually:',link);
+    });
+  }else{
+    prompt('Copy this link manually:',link);
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1209,6 +1226,26 @@ function renderMonthlyPL(){
 // ════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',()=>{
   APP_ENV=localStorage.getItem('tickr_env')||'prod';
+
+  // Self-heal: if the page URL carries ?gs=<script-url> (and optionally &env=test),
+  // re-save it to localStorage on every visit. This means a bookmarked/saved link
+  // with these params will always reconnect even if browser data was cleared.
+  const params=new URLSearchParams(window.location.search);
+  const urlGs=params.get('gs');
+  const urlEnv=params.get('env');
+  if(urlEnv==='test'||urlEnv==='prod'){
+    APP_ENV=urlEnv;
+    localStorage.setItem('tickr_env',APP_ENV);
+  }
+  if(urlGs){
+    try{
+      const decoded=decodeURIComponent(urlGs);
+      if(decoded.startsWith('https://script.google.com/')){
+        localStorage.setItem('tickr_gs_url_'+APP_ENV,decoded);
+      }
+    }catch(e){}
+  }
+
   GS_URL=localStorage.getItem('tickr_gs_url_'+APP_ENV)||'';
   document.getElementById('t-date').value=td();
   renderTape();
