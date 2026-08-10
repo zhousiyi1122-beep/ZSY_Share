@@ -223,11 +223,11 @@ input,select,textarea{font-family:inherit}
       <div class="fg2">
         <div class="fg" style="margin-bottom:0">
           <label class="fl">ASX Code</label>
-          <select class="fs mono" id="t-code" onchange="onTradeFieldChange()"><option value="">Select…</option></select>
+          <select class="fs mono" id="t-code" onchange="onCodeOrTypeChange()"><option value="">Select…</option></select>
         </div>
         <div class="fg" style="margin-bottom:0">
           <label class="fl">Type</label>
-          <select class="fs" id="t-type" onchange="onTradeFieldChange()"><option value="">Select…</option></select>
+          <select class="fs" id="t-type" onchange="onCodeOrTypeChange()"><option value="">Select…</option></select>
         </div>
       </div>
       <div class="fg" id="lot-picker-wrap" style="display:none">
@@ -900,6 +900,7 @@ function initTradeForm(){
   const cancelBtn=document.getElementById('trade-cancel-edit-btn');
   if(cancelBtn)cancelBtn.style.display='none';
   updateCommLabel();
+  updateLotPicker();
   onTradeFieldChange();
 }
 
@@ -930,6 +931,7 @@ function editTrade(id){
   document.getElementById('t-notes').value=t.notes||'';
   commOverridden=false;
   updateCommLabel();
+  updateLotPicker();
   onTradeFieldChange();
   if(t.sourceLotId){
     const lotSel=document.getElementById('t-lot');
@@ -959,7 +961,6 @@ function onTradeFieldChange(){
   const amount=qty*price;
   const dir=currentDirection();
   updateCommLabel();
-  updateLotPicker();
   const commPct=parseFloat(DB.settings.commissionPct||'0.10');
   const gstPct=parseFloat(DB.settings.commissionGstPct||'10');
 
@@ -973,6 +974,11 @@ function onTradeFieldChange(){
     document.getElementById('t-comm').value=autoComm.toFixed(2);
   }
   updateTradeTotal();
+}
+
+function onCodeOrTypeChange(){
+  updateLotPicker();
+  onTradeFieldChange();
 }
 
 function updateLotPicker(){
