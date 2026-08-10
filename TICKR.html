@@ -230,6 +230,11 @@ input,select,textarea{font-family:inherit}
           <select class="fs" id="t-type" onchange="onTradeFieldChange()"><option value="">Select…</option></select>
         </div>
       </div>
+      <div class="fg" id="lot-picker-wrap" style="display:none">
+        <label class="fl">Sell From Lot</label>
+        <select class="fs" id="t-lot" onchange="onLotChange()"><option value="">Average (across all lots)</option></select>
+        <div id="lot-hint" style="font-size:11px;color:var(--ink3);margin-top:5px"></div>
+      </div>
       <div class="fg2">
         <div class="fg" style="margin-bottom:0">
           <label class="fl">Quantity</label>
@@ -540,37 +545,112 @@ function goTo(page){
 // ════════════════════════════════════════════════════════════════
 // HOLDINGS COMPUTATION (average-cost method)
 // ════════════════════════════════════════════════════════════════
-function computePortfolio(){
-  const holdings={};
+// Builds per-code pools (qty/costBasis/dividends/realizedPL — same shape as before)
+// AND per-code lot arrays (individual buy parcels with remaining qty), so a sell
+// can either use average-cost (default, unchanged behaviour) or draw from one
+// specific lot (sourceLotId) for accurate parcel-level P/L.
+function buildLotState(trades){
+  const pools={};
+  const lots={}; // code -> array of {id,date,originalQty,remainingQty,totalCost,costPerShare}
   const events=[];
-  const sorted=[...DB.trades].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const sorted=[...trades].sort((a,b)=>{
+    const dc=(a.date||'').localeCompare(b.date||'');
+    if(dc!==0)return dc;
+    return (a.id||'').localeCompare(b.id||'');
+  });
   sorted.forEach(t=>{
     const typeObj=DB.types.find(ty=>ty.name===t.type)||{direction:'none'};
-    if(!holdings[t.code])holdings[t.code]={qty:0,costBasis:0,dividends:0,realizedPL:0};
-    const h=holdings[t.code];
+    if(!pools[t.code])pools[t.code]={qty:0,costBasis:0,dividends:0,realizedPL:0};
+    if(!lots[t.code])lots[t.code]=[];
+    const pool=pools[t.code];
+    const codeLots=lots[t.code];
     const month=(t.date||'').slice(0,7)||'unknown';
+
     if(typeObj.direction==='buy'){
-      h.qty+=t.qty;
-      h.costBasis+=t.total;
+      pool.qty+=t.qty;
+      pool.costBasis+=t.total;
+      codeLots.push({id:t.id,date:t.date,originalQty:t.qty,remainingQty:t.qty,totalCost:t.total,costPerShare:t.qty>0?t.total/t.qty:0});
+
     }else if(typeObj.direction==='sell'){
-      const avgCost=h.qty>0?h.costBasis/h.qty:0;
-      const sellQty=Math.min(t.qty,h.qty);
-      const costOfSold=avgCost*sellQty;
-      const pl=t.total-costOfSold;
-      h.realizedPL+=pl;
-      h.qty-=sellQty;
-      h.costBasis-=costOfSold;
-      if(h.qty<=0.0001){h.qty=0;h.costBasis=0;}
+      let sellQty=Math.min(t.qty,pool.qty);
+      let pl=0;
+
+      if(t.sourceLotId){
+        const lot=codeLots.find(l=>l.id===t.sourceLotId&&l.remainingQty>0.0001);
+        if(lot){
+          const fromLot=Math.min(sellQty,lot.remainingQty);
+          const costFromLot=lot.costPerShare*fromLot;
+          lot.remainingQty-=fromLot;
+          pool.qty-=fromLot;
+          pool.costBasis-=costFromLot;
+          const proceedsForLotPortion=sellQty>0?t.total*(fromLot/sellQty):0;
+          pl+=proceedsForLotPortion-costFromLot;
+
+          const remainder=sellQty-fromLot;
+          if(remainder>0.0001&&pool.qty>0){
+            const avgCost=pool.costBasis/pool.qty;
+            const costOfRemainder=avgCost*remainder;
+            pool.qty-=remainder;
+            pool.costBasis-=costOfRemainder;
+            reduceLotsProportionally(codeLots,remainder);
+            const proceedsForRemainder=t.total*(remainder/sellQty);
+            pl+=proceedsForRemainder-costOfRemainder;
+          }
+        }else{
+          // Referenced lot no longer available (fully sold/deleted) — fall back to average
+          const avgCost=pool.qty>0?pool.costBasis/pool.qty:0;
+          const costOfSold=avgCost*sellQty;
+          pl=t.total-costOfSold;
+          pool.qty-=sellQty;
+          pool.costBasis-=costOfSold;
+          reduceLotsProportionally(codeLots,sellQty);
+        }
+      }else{
+        // Average-cost method (unchanged default behaviour)
+        const avgCost=pool.qty>0?pool.costBasis/pool.qty:0;
+        const costOfSold=avgCost*sellQty;
+        pl=t.total-costOfSold;
+        pool.qty-=sellQty;
+        pool.costBasis-=costOfSold;
+        reduceLotsProportionally(codeLots,sellQty);
+      }
+
+      if(pool.qty<=0.0001){pool.qty=0;pool.costBasis=0;}
+      pool.realizedPL+=pl;
       events.push({date:t.date,month,code:t.code,kind:'realized',amount:pl});
+
     }else{
-      h.dividends+=t.total;
+      pool.dividends+=t.total;
       events.push({date:t.date,month,code:t.code,kind:'dividend',amount:t.total});
     }
   });
-  return {holdings,events};
+  return {pools,lots,events};
+}
+
+function reduceLotsProportionally(codeLots,qtyToRemove){
+  const totalRemaining=codeLots.reduce((s,l)=>s+l.remainingQty,0);
+  if(totalRemaining<=0)return;
+  codeLots.forEach(l=>{
+    if(l.remainingQty<=0)return;
+    const share=qtyToRemove*(l.remainingQty/totalRemaining);
+    l.remainingQty=Math.max(0,l.remainingQty-share);
+  });
+}
+
+function computePortfolio(){
+  const state=buildLotState(DB.trades);
+  return {holdings:state.pools,events:state.events};
 }
 
 function computeHoldings(){return computePortfolio().holdings;}
+
+// Open lots for a code, optionally excluding one trade (used when editing a sell
+// so the lot it originally consumed shows back up as available).
+function computeOpenLots(code,excludeTradeId){
+  const trades=excludeTradeId?DB.trades.filter(t=>t.id!==excludeTradeId):DB.trades;
+  const state=buildLotState(trades);
+  return (state.lots[code]||[]).filter(l=>l.remainingQty>0.0001);
+}
 
 function estimateCommission(value){
   const commPct=parseFloat(DB.settings.commissionPct||'0.10');
@@ -851,6 +931,10 @@ function editTrade(id){
   commOverridden=false;
   updateCommLabel();
   onTradeFieldChange();
+  if(t.sourceLotId){
+    const lotSel=document.getElementById('t-lot');
+    if(lotSel){lotSel.value=t.sourceLotId;onLotChange();}
+  }
 
   const btn=document.getElementById('trade-save-btn');
   if(btn)btn.textContent='💾 Update Trade';
@@ -875,6 +959,7 @@ function onTradeFieldChange(){
   const amount=qty*price;
   const dir=currentDirection();
   updateCommLabel();
+  updateLotPicker();
   const commPct=parseFloat(DB.settings.commissionPct||'0.10');
   const gstPct=parseFloat(DB.settings.commissionGstPct||'10');
 
@@ -888,6 +973,45 @@ function onTradeFieldChange(){
     document.getElementById('t-comm').value=autoComm.toFixed(2);
   }
   updateTradeTotal();
+}
+
+function updateLotPicker(){
+  const wrap=document.getElementById('lot-picker-wrap');
+  if(!wrap)return;
+  const dir=currentDirection();
+  const code=document.getElementById('t-code').value;
+  if(dir!=='sell'||!code){
+    wrap.style.display='none';
+    const sel=document.getElementById('t-lot');
+    if(sel)sel.value='';
+    const hint=document.getElementById('lot-hint');
+    if(hint)hint.textContent='';
+    return;
+  }
+  wrap.style.display='block';
+  const sel=document.getElementById('t-lot');
+  const cur=sel.value;
+  const openLots=computeOpenLots(code,editingTradeId);
+  sel.innerHTML='<option value="">Average (across all lots)</option>'
+    +openLots.map(l=>'<option value="'+l.id+'">'+l.remainingQty.toLocaleString()+' sh @ '+fP(l.costPerShare)+' (bought '+fD(l.date)+')</option>').join('');
+  if(cur&&openLots.find(l=>l.id===cur))sel.value=cur;
+  onLotChange();
+}
+
+function onLotChange(){
+  const sel=document.getElementById('t-lot');
+  const hint=document.getElementById('lot-hint');
+  if(!sel||!hint)return;
+  const lotId=sel.value;
+  if(!lotId){
+    hint.textContent='Sells at average cost across all open lots for this code.';
+    return;
+  }
+  const code=document.getElementById('t-code').value;
+  const lot=computeOpenLots(code,editingTradeId).find(l=>l.id===lotId);
+  if(lot){
+    hint.textContent='This lot has '+lot.remainingQty.toLocaleString()+' shares available. Selling more than this will draw the remainder from average cost.';
+  }
 }
 
 function onCommissionOverride(){
@@ -941,6 +1065,7 @@ function saveTrade(){
     commissionGstAmt:(dir==='buy'||dir==='sell')?commGstAmt:0,
     commission:(dir==='buy'||dir==='sell')?finalComm:0,
     total,
+    sourceLotId:dir==='sell'?(document.getElementById('t-lot').value||''):'',
     notes:document.getElementById('t-notes').value||''
   };
 
