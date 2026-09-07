@@ -1,5 +1,5 @@
 // TICKR Service Worker — network-first, versioned cache
-const CACHE = 'TICKR-v1';
+const CACHE = 'TICKR-v2';
 
 self.addEventListener('install', e => { self.skipWaiting(); });
 
