@@ -272,6 +272,10 @@ input,select,textarea{font-family:inherit}
     <!-- ═══ REPORTS ═══ -->
     <div class="page" id="page-reports">
       <div class="set-card" style="margin-bottom:14px">
+        <div class="fg" style="margin-bottom:12px">
+          <label class="fl">Financial Year (1 Jul – 30 Jun)</label>
+          <select class="fs" id="rep-fy-sel" onchange="onFYChange()"><option value="">Select a financial year…</option></select>
+        </div>
         <div class="fg2" style="margin-bottom:0">
           <div class="fg" style="margin-bottom:0">
             <label class="fl">From</label>
@@ -1268,6 +1272,7 @@ function deleteType(name){
 // ════════════════════════════════════════════════════════════════
 function renderReports(){
   fillReportCodeFilter();
+  fillFYSelector();
   renderPLByCode();
   renderMonthlyPL();
 }
@@ -1277,6 +1282,46 @@ function fillReportCodeFilter(){
   const cur=sel.value;
   sel.innerHTML='<option value="">All Codes</option>'+DB.codes.map(c=>'<option value="'+c.code+'">'+c.code+'</option>').join('');
   if(cur)sel.value=cur;
+}
+
+// Financial year runs 1 Jul -> 30 Jun. Builds a list spanning from the
+// earliest trade's FY through to the current (or upcoming) FY.
+function fyBounds(startYear){
+  return {from:startYear+'-07-01', to:(startYear+1)+'-06-30'};
+}
+function fyLabel(startYear){
+  return 'FY '+startYear+'–'+String(startYear+1).slice(-2);
+}
+function fyStartYearForDate(dateStr){
+  const d=(dateStr||'').split('T')[0].split(' ')[0];
+  const parts=d.split('-');
+  const y=parseInt(parts[0],10), m=parseInt(parts[1],10);
+  if(!y)return null;
+  return m>=7?y:y-1;
+}
+function fillFYSelector(){
+  const sel=document.getElementById('rep-fy-sel');
+  if(!sel)return;
+  const cur=sel.value;
+  const dates=DB.trades.map(t=>fyStartYearForDate(t.date)).filter(y=>y!==null);
+  const now=new Date();
+  const curFYStart=now.getMonth()>=6?now.getFullYear():now.getFullYear()-1;
+  let minY=dates.length?Math.min(...dates):curFYStart;
+  let maxY=Math.max(curFYStart,dates.length?Math.max(...dates):curFYStart);
+  const years=[];
+  for(let y=maxY;y>=minY;y--)years.push(y);
+  sel.innerHTML='<option value="">Select a financial year…</option>'
+    +years.map(y=>'<option value="'+y+'">'+fyLabel(y)+'</option>').join('');
+  if(cur)sel.value=cur;
+}
+function onFYChange(){
+  const sel=document.getElementById('rep-fy-sel');
+  const y=sel.value;
+  if(!y){return;}
+  const {from,to}=fyBounds(parseInt(y,10));
+  document.getElementById('rep-date-from').value=from;
+  document.getElementById('rep-date-to').value=to;
+  onReportDateChange();
 }
 
 function getReportDateRange(){
@@ -1301,6 +1346,8 @@ function onReportDateChange(){
 function clearReportDates(){
   document.getElementById('rep-date-from').value='';
   document.getElementById('rep-date-to').value='';
+  const fySel=document.getElementById('rep-fy-sel');
+  if(fySel)fySel.value='';
   onReportDateChange();
 }
 
